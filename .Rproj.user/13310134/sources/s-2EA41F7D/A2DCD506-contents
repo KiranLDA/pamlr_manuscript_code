@@ -1,0 +1,175 @@
+## Box1
+library(pamlr)
+# Load the data
+data("hoopoe")
+
+
+# Function to plot color bar
+color.bar <- function(lut, min, max=-min, nticks=11, ticks=seq(min, max, len=nticks), title='') {
+  scale = (length(lut)-1)/(max-min)
+  plot(c(0,10), c(min,max), type='n', bty='n', xaxt='n', xlab='', yaxt='n', ylab='', main=title)
+  axis(2, ticks, las=1)
+  for (i in 1:(length(lut)-1)) {
+    y = (i-1)/scale + min
+    rect(0,y,10,y+1/scale, col=lut[i], border=NA)
+  }
+}
+
+
+
+# make sure the cropping period is in the correct date format
+start = as.POSIXct("2016-07-01","%Y-%m-%d", tz="UTC")
+end = as.POSIXct("2017-06-01","%Y-%m-%d", tz="UTC")
+
+
+
+
+#plot
+# Crop the data
+PAM_data= create_crop(hoopoe,start,end)
+
+
+
+################################################
+par(mfrow= c(1,4), # number of panels
+    oma=c(3,2,0,6), # outer margin around all panels
+    mar =  c(5,1,4,1)) # inner margin around individual fivure
+
+# Activity
+plot_sensorimage(PAM_data$acceleration$date, ploty=FALSE,
+                 PAM_data$acceleration$act, main = "Activity",
+                 col=c("white",(viridis::magma(90))), cex=1.2, cex.main = 2)
+plot_sensorimage_legend(PAM_data$acceleration$act,c("white",(viridis::magma(90))), inset=c(0.5,-0.15),title="Summed z-axial movements (5 min)")
+
+# Pitch
+plot_sensorimage(PAM_data$acceleration$date, plotx=TRUE, ploty=FALSE, labely=FALSE,
+                 PAM_data$acceleration$pit,  main="Pitch",
+                 col=c("black",(viridis::magma(90))), cex=1.2, cex.main = 2)
+plot_sensorimage_legend(PAM_data$acceleration$pit,c("black",(viridis::magma(90))),inset=c(0.5,-0.15), title="Relative Angle")
+
+#Pressure
+plot_sensorimage(PAM_data$pressure$date, plotx=TRUE, ploty=FALSE, labely=FALSE,
+                 PAM_data$pressure$obs,  main="Pressure",
+                 col=c(rev(viridis::magma(90))), cex=1.2, cex.main = 2)
+plot_sensorimage_legend(PAM_data$pressure$obs,c(rev(viridis::magma(90))), inset=c(0.5,-0.15), title="Hectopascals")
+
+#Temperat
+plot_sensorimage(PAM_data$temperature$date, labely=FALSE,
+                 (PAM_data$temperature$obs),  main="Temperature",
+                 col=c("black",(viridis::magma(90))), cex=1.2, cex.main = 2)
+plot_sensorimage_legend(PAM_data$temperature$obs,c("black",(viridis::magma(90))),inset=c(0.5,-0.15), title="Degrees Celsius")
+
+
+
+par(mfrow= c(1,1), # number of panels
+    oma=c(1,1,1,1), # outer margin around all panels
+    mar =  c(4,1,4,1))
+
+
+# Classify behaviour
+behaviour = classify_flap(dta = PAM_data$acceleration, period = 12)
+str(behaviour)
+
+
+# Plot behaviour
+col=col=c("black","royalblue4","chartreuse4","gold")
+index= 7300:8000
+plot(PAM_data$acceleration$date[index],PAM_data$acceleration$act[index],
+     type="l", xlab="Date", ylab="Activity")
+points(PAM_data$acceleration$date[index],PAM_data$acceleration$act[index],
+       col=col[behaviour$classification+1][index],
+       pch=16,)
+legend( PAM_data$acceleration$date[index[1]],60 ,
+        c("No activity", "Low activity", "High activity", "Migration" ) ,
+        col = col[c(behaviour$no_movement, behaviour$low_movement,
+                    behaviour$high_movement, behaviour$migration)+1],
+        pch=20)
+
+twl = GeoLight::twilightCalc(PAM_data$light$date, PAM_data$light$obs,
+                             LightThreshold = 2, ask = FALSE)
+availavariable = c("pressure", "light", "acceleration")
+
+to_classify= create_summary_statistics(PAM_data,
+                                       method= "flap",
+                                       twl = twl)
+
+to_classify= to_classify[complete.cases(to_classify),]
+
+
+
+to_classify = create_rolling_window(PAM_data,
+                                    resolution_out = 30 ,
+                                    window = 24*60,
+                                    interp = FALSE)
+
+
+#########################################################
+
+
+# choose variables of interest
+varint = c("sd_pressure",
+           "min_temperature",
+           #"sd_act",
+           "max_act")
+
+
+#plot these variables of interest
+par(mfrow=c(4,1), mar=c(4,4,0.5,0.5))
+for (i in 1:length(varint)){
+  plot(to_classify$date, to_classify[,varint[i]],
+       type="l", xlab="Date", ylab = varint[i])
+}
+
+
+
+#####################################################
+#######################################################
+# k-means example
+#######################################################
+
+classification = classify_summary_statistics(log10(to_classify[,varint]),
+                                             states=2, "kmeans")$cluster
+# pressure_classification = create_merged_classification(from = to_classify$start,
+# to =to_classify$end,
+# classification = classification,
+# add_to = to_classify$pressure)
+
+plot(to_classify$date, to_classify$pressure,
+     type="l")
+points(to_classify$date, to_classify$pressure,
+       col= classification+1,
+       pch=16)
+
+
+
+
+
+
+#######################################################
+# HMM example
+#######################################################
+
+classification = classify_summary_statistics(to_classify[,varint],
+                                             states=3, "hmm")$cluster
+
+
+plot(to_classify$date, to_classify$pressure,
+     type="l")
+points(to_classify$date, to_classify$pressure,
+       col= classification+1,
+       pch=16)
+
+
+#######################################################
+# EMBC example
+#######################################################
+
+classification = classify_summary_statistics(to_classify[,varint],
+                                             "embc")$cluster
+
+plot(to_classify$date, to_classify$pressure,
+     type="l")
+points(to_classify$date, to_classify$pressure,
+       col= classification+1,
+       pch=16)
+

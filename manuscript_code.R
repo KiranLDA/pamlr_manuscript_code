@@ -249,7 +249,7 @@ plot_sensorimage(result_comparison$date, labely = FALSE,
 comparison = compare_classifications(date=result_comparison$date,
                                      classifications = result_comparison[c("act_mig","P_mig","kmean_mig", "embc_mig","hmm_mig")])
 
-
+# plot the comparison/agreement between the different outputs
 par(mfrow= c(1,1), # number of panels
     oma=c(0,2,0,6),mar = c(4,3,4,7))
 plot_sensorimage(comparison$date,#result_comparison$date,
@@ -260,8 +260,7 @@ plot_sensorimage(comparison$date,#result_comparison$date,
 legend("right",cex=1.2,legend= 0:5, fill = c("black",viridis::viridis(5)), xpd = NA)
 
 
-
-
+# generate a confusion matrix
 compare_confusion_matrix(result_comparison$act_mig, result_comparison$P_mig)
 
 
